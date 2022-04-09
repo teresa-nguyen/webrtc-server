@@ -40,6 +40,15 @@ const io = require("socket.io")(server, {
   },
 });
 
+io.on("connection", (socket) => {
+  console.log(`user connected ${socket.id}`);
+
+  socket.on("create-new-room", (data) => {
+    console.log("hose is createing new room");
+    console.log(data);
+  });
+});
+
 server.listen(PORT, () => {
   console.log(`Server is listening on ${PORT}`);
 });
