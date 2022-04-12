@@ -44,10 +44,107 @@ io.on("connection", (socket) => {
   console.log(`user connected ${socket.id}`);
 
   socket.on("create-new-room", (data) => {
-    console.log("hose is createing new room");
-    console.log(data);
+    createNewRoomHandler(data, socket);
+  });
+
+  socket.on("join-room", (data) => {
+    joinRoomHandler(data, socket);
+  });
+
+  socket.on("disconnect", () => {
+    disconnectHandler(socket);
   });
 });
+
+//socket.io handlers
+
+const createNewRoomHandler = (data, socket) => {
+  console.log("host is creating new room");
+  console.log(data);
+  const { identity } = data;
+
+  const roomId = uuidv4();
+
+  // create new user
+  const newUser = {
+    identity,
+    id: uuidv4(),
+    socketId: socket.id,
+    roomId,
+  };
+
+  //push that user to connectedUsers
+  connectedUsers = [...connectedUsers, newUser];
+
+  //create new room
+  const newRoom = {
+    id: roomId,
+    connectedUsers: [newUser],
+  };
+
+  // join socket.io room
+  socket.join(roomId);
+
+  rooms = [...rooms, newRoom];
+
+  //emit to that client which create that room roomId
+  socket.emit("room-id", { roomId });
+
+  //emit an event to all users connected
+  //to that room about new users which are right now in this room
+  socket.emit("room-update", { connectedUsers: newRoom.connectedUsers });
+};
+
+const joinRoomHandler = (data, socket) => {
+  const { identity, roomId } = data;
+
+  const newUser = {
+    identity,
+    id: uuidv4(),
+    socketId: socket.id,
+    roomId,
+  };
+
+  //join room as user which just is trying to join room passing room id
+  const room = rooms.find((room) => room.id === roomId);
+  room.connectedUsers = [...room.connectedUsers, newUser];
+
+  //join socket.io room
+  socket.join(roomId);
+
+  //add new user to conencted user array
+  connectedUsers = [...connectedUsers, newUser];
+
+  io.to(roomId).emit("room-update", { connectedUsers: room.connectedUsers });
+};
+
+const disconnectHandler = (socket) => {
+  //find if user has been registered - if yes remove him form room and connect users array
+  const user = connectedUsers.find((user) => user.socketId === socket.id);
+
+  if (user) {
+    //remove user from room in server
+    const room = rooms.find((room) => room.id === user.roomId);
+
+    room.connectedUsers = room.connectedUsers.filter(
+      (user) => user.socketId !== socket.id
+    );
+
+    //leave socket io room
+    socket.leave(user.roomId);
+
+    //TODO
+    //close the room if amount of the users which will stay in room will be 0
+    if (room.connectedUsers.length > 0) {
+      //emit an event to rest of users which left in the room new connectedUsers in room
+      io.to(room.id).emit("room-update", {
+        connectedUsers: room.connectedUsers,
+      });
+    } else {
+      rooms = rooms.filter((r) => r.id !== room.id);
+    }
+  }
+};
 
 server.listen(PORT, () => {
   console.log(`Server is listening on ${PORT}`);
