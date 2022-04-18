@@ -54,6 +54,16 @@ io.on("connection", (socket) => {
   socket.on("disconnect", () => {
     disconnectHandler(socket);
   });
+
+  socket.on("conn-signal", (data) => {
+    console.log("connection socket on conn-signal");
+    signalingHandler(data, socket);
+  });
+
+  socket.on("conn-init", (data) => {
+    console.log("connection socket on conn-signal");
+    initializeConnectionHandler(data, socket);
+  });
 });
 
 //socket.io handlers
@@ -115,6 +125,17 @@ const joinRoomHandler = (data, socket) => {
   //add new user to conencted user array
   connectedUsers = [...connectedUsers, newUser];
 
+  //emit to all users which are already in this room to prepare peer connection
+  room.connectedUsers.forEach((user) => {
+    if (user.socketId !== socket.id) {
+      const data = {
+        connUserSocketId: socket.id,
+      };
+      console.log("emit conn-prepare", data);
+      io.to(user.socketId).emit("conn-prepare", data);
+    }
+  });
+
   io.to(roomId).emit("room-update", { connectedUsers: room.connectedUsers });
 };
 
@@ -144,6 +165,23 @@ const disconnectHandler = (socket) => {
       rooms = rooms.filter((r) => r.id !== room.id);
     }
   }
+};
+
+const signalingHandler = (data, socket) => {
+  const { connUserSocketId, signal } = data;
+
+  const signalingData = { signal, connUserSocketId: socket.id };
+  console.log("eimit conn-signal", signalingData);
+  io.to(connUserSocketId).emit("conn-signal", signalingData);
+};
+
+//information from clinets which are already in room that they are prepared for incoming connection
+const initializeConnectionHandler = (data, socket) => {
+  const { connUserSocketId } = data;
+
+  const initData = { connUserSocketId: socket.id };
+  console.log("emit conn-init", initData);
+  io.to(connUserSocketId).emit("conn-init", initData);
 };
 
 server.listen(PORT, () => {
