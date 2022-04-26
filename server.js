@@ -1,8 +1,7 @@
-const express = require("express");
-const http = require("http");
-const { v4: uuidv4 } = require("uuid");
-const cors = require("cors");
-const twilio = require("twilio");
+const express = require('express');
+const http = require('http');
+const { v4: uuidv4 } = require('uuid');
+const cors = require('cors');
 
 const PORT = process.env.PORT || 5002;
 
@@ -16,7 +15,7 @@ let connectedUsers = [];
 let rooms = [];
 
 //create route to check if room exists
-app.get("/api/room-exists/:roomId", (req, res) => {
+app.get('/api/room-exists/:roomId', (req, res) => {
   const { roomId } = req.params;
   const room = rooms.find((room) => room.id === roomId);
 
@@ -33,43 +32,48 @@ app.get("/api/room-exists/:roomId", (req, res) => {
   }
 });
 
-const io = require("socket.io")(server, {
+const io = require('socket.io')(server, {
   cors: {
-    origin: "*",
-    methods: ["GET", "POST"],
+    origin: '*',
+    methods: ['GET', 'POST'],
   },
 });
 
-io.on("connection", (socket) => {
+io.on('connection', (socket) => {
   console.log(`user connected ${socket.id}`);
 
-  socket.on("create-new-room", (data) => {
+  socket.on('create-new-room', (data) => {
     createNewRoomHandler(data, socket);
   });
 
-  socket.on("join-room", (data) => {
+  socket.on('join-room', (data) => {
     joinRoomHandler(data, socket);
   });
 
-  socket.on("disconnect", () => {
+  socket.on('disconnect', () => {
     disconnectHandler(socket);
   });
 
-  socket.on("conn-signal", (data) => {
-    console.log("connection socket on conn-signal");
+  socket.on('conn-signal', (data) => {
+    console.log('connection socket on conn-signal');
     signalingHandler(data, socket);
   });
 
-  socket.on("conn-init", (data) => {
-    console.log("connection socket on conn-signal");
+  socket.on('conn-init', (data) => {
+    console.log('connection socket on conn-signal');
     initializeConnectionHandler(data, socket);
+  });
+
+  socket.on('msg-sent', (data) => {
+    console.log('on msg-sent');
+    messageSentHandler(data, socket);
   });
 });
 
 //socket.io handlers
 
 const createNewRoomHandler = (data, socket) => {
-  console.log("host is creating new room");
+  console.log('host is creating new room');
   console.log(data);
   const { identity } = data;
 
@@ -98,11 +102,11 @@ const createNewRoomHandler = (data, socket) => {
   rooms = [...rooms, newRoom];
 
   //emit to that client which create that room roomId
-  socket.emit("room-id", { roomId });
+  socket.emit('room-id', { roomId });
 
   //emit an event to all users connected
   //to that room about new users which are right now in this room
-  socket.emit("room-update", { connectedUsers: newRoom.connectedUsers });
+  socket.emit('room-update', { connectedUsers: newRoom.connectedUsers });
 };
 
 const joinRoomHandler = (data, socket) => {
@@ -131,12 +135,12 @@ const joinRoomHandler = (data, socket) => {
       const data = {
         connUserSocketId: socket.id,
       };
-      console.log("emit conn-prepare", data);
-      io.to(user.socketId).emit("conn-prepare", data);
+      console.log('emit conn-prepare');
+      io.to(user.socketId).emit('conn-prepare', data);
     }
   });
 
-  io.to(roomId).emit("room-update", { connectedUsers: room.connectedUsers });
+  io.to(roomId).emit('room-update', { connectedUsers: room.connectedUsers });
 };
 
 const disconnectHandler = (socket) => {
@@ -157,10 +161,10 @@ const disconnectHandler = (socket) => {
     //close the room if amount of the users which will stay in room will be 0
     if (room.connectedUsers.length > 0) {
       // emit to all users which are still in the room that user disconnected
-      io.to(room.id).emit("user-disconnected", { socketId: socket.id });
+      io.to(room.id).emit('user-disconnected', { socketId: socket.id });
 
       //emit an event to rest of users which left in the room new connectedUsers in room
-      io.to(room.id).emit("room-update", {
+      io.to(room.id).emit('room-update', {
         connectedUsers: room.connectedUsers,
       });
     } else {
@@ -173,8 +177,8 @@ const signalingHandler = (data, socket) => {
   const { connUserSocketId, signal } = data;
 
   const signalingData = { signal, connUserSocketId: socket.id };
-  console.log("eimit conn-signal", signalingData);
-  io.to(connUserSocketId).emit("conn-signal", signalingData);
+  console.log('emit conn-signal');
+  io.to(connUserSocketId).emit('conn-signal', signalingData);
 };
 
 //information from clinets which are already in room that they are prepared for incoming connection
@@ -182,8 +186,13 @@ const initializeConnectionHandler = (data, socket) => {
   const { connUserSocketId } = data;
 
   const initData = { connUserSocketId: socket.id };
-  console.log("emit conn-init", initData);
-  io.to(connUserSocketId).emit("conn-init", initData);
+  console.log('emit conn-init');
+  io.to(connUserSocketId).emit('conn-init', initData);
+};
+
+const messageSentHandler = (data, socket) => {
+  console.log('emit msg-broadcast to room:', socket.rooms, 'with data:', data);
+  socket.broadcast.to(Array.from(socket.rooms)[1]).emit('msg-broadcast', data);
 };
 
 server.listen(PORT, () => {
